@@ -2,7 +2,20 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Heart, Sparkles, Gift, Camera, Plus, Send, LogOut, UserPlus, Copy, Check, Share2, Mail } from "lucide-react";
+import {
+  Heart,
+  Sparkles,
+  Gift,
+  Camera,
+  Plus,
+  Send,
+  LogOut,
+  UserPlus,
+  Copy,
+  Check,
+  Share2,
+  Mail,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -67,7 +80,7 @@ export default function Dashboard({ user }: DashboardProps) {
     if (!user) return;
     fetchProfile();
     fetchContent();
-    // Only handle invitation ONCE after login/session.
+    // Only handle invitation once per session/load
     if (!invitationHandledRef.current) {
       handleInvitationAcceptance();
     }
@@ -117,7 +130,6 @@ export default function Dashboard({ user }: DashboardProps) {
   const fetchProfile = async () => {
     setLoading(true);
     try {
-      // Fetch user, no JOIN to avoid recursion
       const { data, error } = await supabase
         .from("users")
         .select("id, name, email, avatar_url, partner_id")
@@ -141,7 +153,6 @@ export default function Dashboard({ user }: DashboardProps) {
         return;
       }
 
-      // Fetch partner info if present
       let partner = null;
       if (data?.partner_id) {
         const { data: partnerData, error: partnerError } = await supabase
@@ -387,6 +398,7 @@ export default function Dashboard({ user }: DashboardProps) {
           </div>
         </div>
       </motion.header>
+
       <div className="max-w-4xl mx-auto px-4 py-8">
         <AnimatePresence>
           {showInvite && (
@@ -484,180 +496,172 @@ export default function Dashboard({ user }: DashboardProps) {
             </motion.div>
           )}
         </AnimatePresence>
-        {!profile?.partner_id ? (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-12">
-            <Heart className="w-16 h-16 text-pink-300 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">Welcome to Your Love Space! 💕</h2>
-            <p className="text-gray-600 mb-6">
-              Invite your partner to start sharing cute dares, love orders, and precious memories together.
-            </p>
-            <Button
-              onClick={() => setShowInvite(true)}
-              className="bg-gradient-to-r from-pink-500 to-purple-500 text-white"
+
+        {/* === Main Dashboard Content (always shown) === */}
+
+        {/* Tabs */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="flex gap-2 mb-8 bg-white/60 backdrop-blur-sm p-2 rounded-2xl border border-pink-100"
+        >
+          {(["dare", "order", "memory"] as ContentType[]).map((type) => (
+            <motion.button
+              key={type}
+              onClick={() => setActiveTab(type)}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-medium transition-all ${
+                activeTab === type
+                  ? "bg-gradient-to-r text-white shadow-lg " + getTabColor(type)
+                  : "text-gray-600 hover:bg-white/50"
+              }`}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
-              <UserPlus className="w-5 h-5 mr-2" />
-              Invite Your Partner
-            </Button>
-          </motion.div>
-        ) : (
-          <>
+              {getTabIcon(type)}
+              <span className="capitalize">{type}s</span>
+            </motion.button>
+          ))}
+        </motion.div>
+
+        {/* Create New Button */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.2 }}
+          className="mb-6"
+        >
+          <Button
+            onClick={() => setShowCreateForm(!showCreateForm)}
+            className={`w-full bg-gradient-to-r text-white shadow-lg hover:shadow-xl transition-all ${getTabColor(
+              activeTab,
+            )}`}
+            size="lg"
+          >
+            <Plus className="w-5 h-5 mr-2" />
+            Create New {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
+          </Button>
+        </motion.div>
+
+        {/* Create Form */}
+        <AnimatePresence>
+          {showCreateForm && (
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="flex gap-2 mb-8 bg-white/60 backdrop-blur-sm p-2 rounded-2xl border border-pink-100"
-            >
-              {(["dare", "order", "memory"] as ContentType[]).map((type) => (
-                <motion.button
-                  key={type}
-                  onClick={() => setActiveTab(type)}
-                  className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-medium transition-all ${
-                    activeTab === type
-                      ? "bg-gradient-to-r text-white shadow-lg " + getTabColor(type)
-                      : "text-gray-600 hover:bg-white/50"
-                  }`}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  {getTabIcon(type)}
-                  <span className="capitalize">{type}s</span>
-                </motion.button>
-              ))}
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.2 }}
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
               className="mb-6"
             >
-              <Button
-                onClick={() => setShowCreateForm(!showCreateForm)}
-                className={`w-full bg-gradient-to-r text-white shadow-lg hover:shadow-xl transition-all ${getTabColor(activeTab)}`}
-                size="lg"
-              >
-                <Plus className="w-5 h-5 mr-2" />
-                Create New {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
-              </Button>
-            </motion.div>
-            <AnimatePresence>
-              {showCreateForm && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="mb-6"
-                >
-                  <Card className="border-pink-200 bg-white/80 backdrop-blur-sm">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        {getTabIcon(activeTab)}
-                        New {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <Input
-                        placeholder="Give it a title..."
-                        value={newItem.title}
-                        onChange={(e) => setNewItem({ ...newItem, title: e.target.value })}
-                        className="border-pink-200 focus:border-pink-400"
-                      />
-                      <Textarea
-                        placeholder="What's on your mind? 💕"
-                        value={newItem.content}
-                        onChange={(e) => setNewItem({ ...newItem, content: e.target.value })}
-                        className="border-pink-200 focus:border-pink-400 min-h-[100px]"
-                      />
-                      <div className="flex gap-2">
-                        <Button
-                          onClick={handleCreateItem}
-                          className={`flex-1 bg-gradient-to-r text-white ${getTabColor(activeTab)}`}
-                        >
-                          <Send className="w-4 h-4 mr-2" />
-                          Send with Love
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => setShowCreateForm(false)}
-                          className="border-pink-200"
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              )}
-            </AnimatePresence>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="space-y-4">
-              <AnimatePresence>
-                {filteredItems.map((item, index) => (
-                  <motion.div
-                    key={item.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    transition={{ delay: index * 0.1 }}
-                    whileHover={{ scale: 1.02 }}
-                  >
-                    <Card
-                      className={`border-pink-200 bg-white/80 backdrop-blur-sm hover:shadow-lg transition-all ${
-                        item.completed ? "opacity-75" : ""
-                      }`}
-                    >
-                      <CardHeader className="pb-3">
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-full bg-gradient-to-r ${getTabColor(item.type)}`}>
-                              {getTabIcon(item.type)}
-                            </div>
-                            <div>
-                              <CardTitle className="text-lg">{item.title}</CardTitle>
-                              <div className="flex items-center gap-2 mt-1">
-                                <Badge variant="secondary" className="text-xs">
-                                  From {item.sender_id === user.id ? "You" : item.sender?.name}
-                                </Badge>
-                                {item.completed && <Badge className="text-xs bg-green-100 text-green-700">Completed ✓</Badge>}
-                              </div>
-                            </div>
-                          </div>
-                          <span className="text-xs text-gray-500">{new Date(item.created_at).toLocaleDateString()}</span>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-gray-700 leading-relaxed">{item.content}</p>
-                        {!item.completed && item.sender_id !== user.id && (
-                          <motion.div className="mt-4" whileHover={{ scale: 1.05 }}>
-                            <Button
-                              size="sm"
-                              className={`bg-gradient-to-r text-white ${getTabColor(item.type)}`}
-                              onClick={() => handleCompleteItem(item.id)}
-                            >
-                              <Heart className="w-4 h-4 mr-2" />
-                              Mark as Done
-                            </Button>
-                          </motion.div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-              {filteredItems.length === 0 && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12">
-                  <div
-                    className={`w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-r ${getTabColor(
-                      activeTab,
-                    )} flex items-center justify-center`}
-                  >
+              <Card className="border-pink-200 bg-white/80 backdrop-blur-sm">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
                     {getTabIcon(activeTab)}
+                    New {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Input
+                    placeholder="Give it a title..."
+                    value={newItem.title}
+                    onChange={(e) => setNewItem({ ...newItem, title: e.target.value })}
+                    className="border-pink-200 focus:border-pink-400"
+                  />
+                  <Textarea
+                    placeholder="What's on your mind? 💕"
+                    value={newItem.content}
+                    onChange={(e) => setNewItem({ ...newItem, content: e.target.value })}
+                    className="border-pink-200 focus:border-pink-400 min-h-[100px]"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={handleCreateItem}
+                      className={`flex-1 bg-gradient-to-r text-white ${getTabColor(activeTab)}`}
+                    >
+                      <Send className="w-4 h-4 mr-2" />
+                      Send with Love
+                    </Button>
+                    <Button variant="outline" onClick={() => setShowCreateForm(false)} className="border-pink-200">
+                      Cancel
+                    </Button>
                   </div>
-                  <h3 className="text-lg font-medium text-gray-700 mb-2">No {activeTab}s yet</h3>
-                  <p className="text-gray-500">Create your first {activeTab} to get started! 💕</p>
-                </motion.div>
-              )}
+                </CardContent>
+              </Card>
             </motion.div>
-          </>
-        )}
+          )}
+        </AnimatePresence>
+
+        {/* Content List */}
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="space-y-4">
+          <AnimatePresence>
+            {filteredItems.map((item, index) => (
+              <motion.div
+                key={item.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ delay: index * 0.1 }}
+                whileHover={{ scale: 1.02 }}
+              >
+                <Card
+                  className={`border-pink-200 bg-white/80 backdrop-blur-sm hover:shadow-lg transition-all ${
+                    item.completed ? "opacity-75" : ""
+                  }`}
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-full bg-gradient-to-r ${getTabColor(item.type)}`}>
+                          {getTabIcon(item.type)}
+                        </div>
+                        <div>
+                          <CardTitle className="text-lg">{item.title}</CardTitle>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge variant="secondary" className="text-xs">
+                              From {item.sender_id === user.id ? "You" : item.sender?.name}
+                            </Badge>
+                            {item.completed && (
+                              <Badge className="text-xs bg-green-100 text-green-700">Completed ✓</Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-xs text-gray-500">{new Date(item.created_at).toLocaleDateString()}</span>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-gray-700 leading-relaxed">{item.content}</p>
+                    {!item.completed && item.sender_id !== user.id && (
+                      <motion.div className="mt-4" whileHover={{ scale: 1.05 }}>
+                        <Button
+                          size="sm"
+                          className={`bg-gradient-to-r text-white ${getTabColor(item.type)}`}
+                          onClick={() => handleCompleteItem(item.id)}
+                        >
+                          <Heart className="w-4 h-4 mr-2" />
+                          Mark as Done
+                        </Button>
+                      </motion.div>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+
+          {filteredItems.length === 0 && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12">
+              <div
+                className={`w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-r ${getTabColor(
+                  activeTab,
+                )} flex items-center justify-center`}
+              >
+                {getTabIcon(activeTab)}
+              </div>
+              <h3 className="text-lg font-medium text-gray-700 mb-2">No {activeTab}s yet</h3>
+              <p className="text-gray-500">Create your first {activeTab} to get started! 💕</p>
+            </motion.div>
+          )}
+        </motion.div>
       </div>
     </div>
   );
