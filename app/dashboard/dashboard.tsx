@@ -1,77 +1,83 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import { Heart, Sparkles, Gift, Camera, Plus, Send, LogOut, UserPlus, Copy, Check, Share2, Mail } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { supabase } from "@/lib/supabase"
-import type { User } from "@supabase/supabase-js"
+import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Heart, Sparkles, Gift, Camera, Plus, Send, LogOut, UserPlus, Copy, Check, Share2, Mail } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { supabase } from "@/lib/supabase";
+import type { User } from "@supabase/supabase-js";
 
-type ContentType = "dare" | "order" | "memory"
+type ContentType = "dare" | "order" | "memory";
 
 interface RelatedUser {
-  name: string
+  name: string;
 }
-
 interface ContentItem {
-  id: string
-  type: ContentType
-  title: string
-  content: string
-  sender_id: string
-  receiver_id: string
-  completed: boolean
-  created_at: string
-  sender?: RelatedUser
-  receiver?: RelatedUser
+  id: string;
+  type: ContentType;
+  title: string;
+  content: string;
+  sender_id: string;
+  receiver_id: string;
+  completed: boolean;
+  created_at: string;
+  sender?: RelatedUser;
+  receiver?: RelatedUser;
 }
 
 interface UserProfile {
-  id: string
-  name: string
-  email: string
-  avatar_url?: string
-  partner_id?: string
+  id: string;
+  name: string;
+  email: string;
+  avatar_url?: string;
+  partner_id?: string;
   partner?: {
-    id: string
-    name: string
-  } | null
+    id: string;
+    name: string;
+  } | null;
 }
 
 interface DashboardProps {
-  user: User
+  user: User;
 }
 
 export default function Dashboard({ user }: DashboardProps) {
-  const [activeTab, setActiveTab] = useState<ContentType>("dare")
-  const [showCreateForm, setShowCreateForm] = useState(false)
-  const [newItem, setNewItem] = useState({ title: "", content: "" })
-  const [items, setItems] = useState<ContentItem[]>([])
-  const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [partnerEmail, setPartnerEmail] = useState("")
-  const [showInvite, setShowInvite] = useState(false)
-  const [inviteLoading, setInviteLoading] = useState(false)
-  const [inviteLink, setInviteLink] = useState("")
-  const [copied, setCopied] = useState(false)
+  const [activeTab, setActiveTab] = useState<ContentType>("dare");
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [newItem, setNewItem] = useState({ title: "", content: "" });
+  const [items, setItems] = useState<ContentItem[]>([]);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [partnerEmail, setPartnerEmail] = useState("");
+  const [showInvite, setShowInvite] = useState(false);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteLink, setInviteLink] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  // Guard to prevent double-invitation-acceptance
+  const invitationHandledRef = useRef(false);
 
   useEffect(() => {
-    if (!user) return
-    fetchProfile()
-    fetchContent()
-    handleInvitationAcceptance()
+    if (!user) return;
+    fetchProfile();
+    fetchContent();
+    // Only handle invitation ONCE after login/session.
+    if (!invitationHandledRef.current) {
+      handleInvitationAcceptance();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user])
+  }, [user]);
 
   const handleInvitationAcceptance = async () => {
-    const invitationCode = user.user_metadata?.invitation_code
-    if (!invitationCode) return
+    invitationHandledRef.current = true;
+    const invitationCode = user.user_metadata?.invitation_code;
+    if (!invitationCode) return;
 
     try {
       const { data: invitation, error: inviteError } = await supabase
@@ -79,38 +85,44 @@ export default function Dashboard({ user }: DashboardProps) {
         .select("*")
         .eq("invitation_code", invitationCode)
         .eq("status", "pending")
-        .single()
+        .single();
 
       if (invitation && !inviteError) {
         const { error: updateError1 } = await supabase
           .from("users")
           .update({ partner_id: invitation.inviter_id })
-          .eq("id", user.id)
+          .eq("id", user.id);
 
         const { error: updateError2 } = await supabase
           .from("users")
           .update({ partner_id: user.id })
-          .eq("id", invitation.inviter_id)
+          .eq("id", invitation.inviter_id);
 
-        await supabase.from("partner_invitations").update({ status: "accepted" }).eq("id", invitation.id)
+        await supabase
+          .from("partner_invitations")
+          .update({ status: "accepted" })
+          .eq("id", invitation.id);
 
         if (!updateError1 && !updateError2) {
-          setTimeout(fetchProfile, 1000)
+          // Immediately refresh profile and content
+          await fetchProfile();
+          await fetchContent();
         }
       }
     } catch (error) {
-      console.error("Error handling invitation:", error)
+      console.error("Error handling invitation:", error);
     }
-  }
+  };
 
   const fetchProfile = async () => {
+    setLoading(true);
     try {
-      // Fetch user without partner join to avoid infinite recursion
+      // Fetch user, no JOIN to avoid recursion
       const { data, error } = await supabase
         .from("users")
         .select("id, name, email, avatar_url, partner_id")
         .eq("id", user.id)
-        .single()
+        .single();
 
       if (error) {
         // Create user row if not exists
@@ -122,48 +134,47 @@ export default function Dashboard({ user }: DashboardProps) {
             name: user.user_metadata?.name || user.email!.split("@")[0],
           })
           .select()
-          .single()
-        if (insertError) throw insertError
-        setProfile(newUser)
-        setLoading(false)
-        return
+          .single();
+        if (insertError) throw insertError;
+        setProfile(newUser);
+        setLoading(false);
+        return;
       }
 
-      let partner = null
+      // Fetch partner info if present
+      let partner = null;
       if (data?.partner_id) {
         const { data: partnerData, error: partnerError } = await supabase
           .from("users")
           .select("id, name")
           .eq("id", data.partner_id)
-          .single()
-        if (!partnerError) {
-          partner = partnerData
+          .single();
+        if (!partnerError && partnerData) {
+          partner = partnerData;
         }
       }
 
-      setProfile({ ...data, partner })
+      setProfile({ ...data, partner });
     } catch (error) {
-      console.error("Error fetching profile:", error)
-      return;
+      console.error("Error fetching profile:", error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const fetchContent = async () => {
     try {
-   const { data, error } = await supabase
-  .from("content")
-  .select(`
-    id, type, title, content, sender_id, receiver_id, completed, created_at,
-    sender:sender_id(name),
-    receiver:receiver_id(name)
-  `)
-  .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-  .order("created_at", { ascending: false })
+      const { data, error } = await supabase
+        .from("content")
+        .select(`
+          id, type, title, content, sender_id, receiver_id, completed, created_at,
+          sender:sender_id(name),
+          receiver:receiver_id(name)
+        `)
+        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+        .order("created_at", { ascending: false });
 
-
-      if (error) throw error
+      if (error) throw error;
 
       const formattedItems: ContentItem[] = data.map((item: any) => ({
         id: item.id,
@@ -176,17 +187,17 @@ export default function Dashboard({ user }: DashboardProps) {
         created_at: item.created_at,
         sender: Array.isArray(item.sender) ? item.sender[0] : item.sender,
         receiver: Array.isArray(item.receiver) ? item.receiver[0] : item.receiver,
-      }))
+      }));
 
-      setItems(formattedItems)
+      setItems(formattedItems);
     } catch (error) {
-      console.error("Error fetching content:", error)
+      console.error("Error fetching content:", error);
       return;
     }
-  }
+  };
 
   const handleCreateItem = async () => {
-    if (!newItem.title.trim() || !newItem.content.trim() || !profile?.partner_id) return
+    if (!newItem.title.trim() || !newItem.content.trim() || !profile?.partner_id) return;
 
     try {
       const { error } = await supabase.from("content").insert({
@@ -195,17 +206,17 @@ export default function Dashboard({ user }: DashboardProps) {
         content: newItem.content,
         sender_id: user.id,
         receiver_id: profile.partner_id,
-      })
+      });
 
-      if (error) throw error
+      if (error) throw error;
 
-      setNewItem({ title: "", content: "" })
-      setShowCreateForm(false)
-      fetchContent()
+      setNewItem({ title: "", content: "" });
+      setShowCreateForm(false);
+      fetchContent();
     } catch (error) {
-      console.error("Error creating item:", error)
+      console.error("Error creating item:", error);
     }
-  }
+  };
 
   const handleCompleteItem = async (itemId: string) => {
     try {
@@ -215,100 +226,99 @@ export default function Dashboard({ user }: DashboardProps) {
           completed: true,
           completed_at: new Date().toISOString(),
         })
-        .eq("id", itemId)
+        .eq("id", itemId);
 
-      if (error) throw error
-      fetchContent()
+      if (error) throw error;
+      fetchContent();
     } catch (error) {
-      console.error("Error completing item:", error)
+      console.error("Error completing item:", error);
     }
-  }
+  };
 
   const generateInviteCode = () => {
-    return Math.random().toString(36).substr(2, 8).toUpperCase()
-  }
+    return Math.random().toString(36).substr(2, 8).toUpperCase();
+  };
 
   const handleSendInvitation = async () => {
-    if (!partnerEmail.trim()) return
+    if (!partnerEmail.trim()) return;
 
-    setInviteLoading(true)
+    setInviteLoading(true);
     try {
-      const invitationCode = generateInviteCode()
-      const expiresAt = new Date()
-      expiresAt.setDate(expiresAt.getDate() + 7)
+      const invitationCode = generateInviteCode();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
 
       const { error } = await supabase.from("partner_invitations").insert({
         inviter_id: user.id,
         invitee_email: partnerEmail,
         invitation_code: invitationCode,
         expires_at: expiresAt.toISOString(),
-      })
+      });
 
-      if (error) throw error
+      if (error) throw error;
 
-      const baseUrl = window.location.origin
-      const inviteUrl = `${baseUrl}?invite=${invitationCode}`
-      setInviteLink(inviteUrl)
-
-      setPartnerEmail("")
+      const baseUrl = window.location.origin;
+      const inviteUrl = `${baseUrl}?invite=${invitationCode}`;
+      setInviteLink(inviteUrl);
+      setPartnerEmail("");
     } catch (error) {
-      console.error("Error sending invitation:", error)
+      console.error("Error sending invitation:", error);
     } finally {
-      setInviteLoading(false)
+      setInviteLoading(false);
     }
-  }
+  };
 
   const copyInviteLink = () => {
-    if (!inviteLink) return
-    navigator.clipboard.writeText(inviteLink)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
+    if (!inviteLink) return;
+    navigator.clipboard.writeText(inviteLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const shareInviteLink = async () => {
-    if (!inviteLink) return
-    if (navigator.share) {
+    if (!inviteLink) return;
+    if ((navigator as any).share) {
       try {
-        await navigator.share({
+        await (navigator as any).share({
           title: "Join me on SnuggleSpace! 💕",
           text: "I've created a private love space for us on SnuggleSpace. Join me!",
           url: inviteLink,
-        })
+        });
       } catch {
-        copyInviteLink()
+        copyInviteLink();
       }
     } else {
-      copyInviteLink()
+      copyInviteLink();
     }
-  }
+  };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut()
-  }
+    await supabase.auth.signOut();
+  };
 
   const getTabIcon = (type: ContentType) => {
     switch (type) {
       case "dare":
-        return <Sparkles className="w-4 h-4" />
+        return <Sparkles className="w-4 h-4" />;
       case "order":
-        return <Gift className="w-4 h-4" />
+        return <Gift className="w-4 h-4" />;
       case "memory":
-        return <Camera className="w-4 h-4" />
+        return <Camera className="w-4 h-4" />;
     }
-  }
+  };
 
   const getTabColor = (type: ContentType) => {
     switch (type) {
       case "dare":
-        return "from-pink-500 to-rose-500"
+        return "from-pink-500 to-rose-500";
       case "order":
-        return "from-purple-500 to-indigo-500"
+        return "from-purple-500 to-indigo-500";
       case "memory":
-        return "from-amber-500 to-orange-500"
+        return "from-amber-500 to-orange-500";
     }
-  }
+  };
 
-  const filteredItems = items.filter((item) => item.type === activeTab)
+  const filteredItems = items.filter((item) => item.type === activeTab);
 
   if (loading) {
     return (
@@ -324,7 +334,7 @@ export default function Dashboard({ user }: DashboardProps) {
           </span>
         </motion.div>
       </div>
-    )
+    );
   }
 
   return (
@@ -349,7 +359,9 @@ export default function Dashboard({ user }: DashboardProps) {
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text text-transparent">
                   SnuggleSpace
                 </h1>
-                <p className="text-sm text-gray-600">{profile?.partner?.name ? `You & ${profile.partner.name}` : "Your private love space"}</p>
+                <p className="text-sm text-gray-600">
+                  {profile?.partner?.name ? `You & ${profile.partner.name}` : "Your private love space"}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -375,7 +387,6 @@ export default function Dashboard({ user }: DashboardProps) {
           </div>
         </div>
       </motion.header>
-
       <div className="max-w-4xl mx-auto px-4 py-8">
         <AnimatePresence>
           {showInvite && (
@@ -394,7 +405,6 @@ export default function Dashboard({ user }: DashboardProps) {
                 className="bg-white rounded-2xl p-6 w-full max-w-md"
               >
                 <h3 className="text-xl font-bold mb-4 text-center">Invite Your Partner 💕</h3>
-
                 {!inviteLink ? (
                   <div className="space-y-4">
                     <div>
@@ -406,7 +416,6 @@ export default function Dashboard({ user }: DashboardProps) {
                         type="email"
                       />
                     </div>
-
                     <div className="flex gap-2">
                       <Button
                         onClick={handleSendInvitation}
@@ -416,7 +425,11 @@ export default function Dashboard({ user }: DashboardProps) {
                         {inviteLoading ? (
                           <motion.div
                             animate={{ rotate: 360 }}
-                            transition={{ duration: 1, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
+                            transition={{
+                              duration: 1,
+                              repeat: Number.POSITIVE_INFINITY,
+                              ease: "linear",
+                            }}
                             className="w-4 h-4 border-2 border-white border-t-transparent rounded-full"
                           />
                         ) : (
@@ -438,12 +451,10 @@ export default function Dashboard({ user }: DashboardProps) {
                         Invitation created! Share this link with your partner:
                       </AlertDescription>
                     </Alert>
-
                     <div className="bg-gray-50 p-3 rounded-lg">
                       <p className="text-xs text-gray-600 mb-2">Invitation Link:</p>
                       <p className="text-sm font-mono break-all">{inviteLink}</p>
                     </div>
-
                     <div className="flex gap-2">
                       <Button onClick={copyInviteLink} variant="outline" className="flex-1 bg-transparent">
                         {copied ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
@@ -457,11 +468,10 @@ export default function Dashboard({ user }: DashboardProps) {
                         Share
                       </Button>
                     </div>
-
                     <Button
                       onClick={() => {
-                        setShowInvite(false)
-                        setInviteLink("")
+                        setShowInvite(false);
+                        setInviteLink("");
                       }}
                       variant="ghost"
                       className="w-full"
@@ -474,7 +484,6 @@ export default function Dashboard({ user }: DashboardProps) {
             </motion.div>
           )}
         </AnimatePresence>
-
         {!profile?.partner_id ? (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-12">
             <Heart className="w-16 h-16 text-pink-300 mx-auto mb-4" />
@@ -515,7 +524,6 @@ export default function Dashboard({ user }: DashboardProps) {
                 </motion.button>
               ))}
             </motion.div>
-
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -531,7 +539,6 @@ export default function Dashboard({ user }: DashboardProps) {
                 Create New {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
               </Button>
             </motion.div>
-
             <AnimatePresence>
               {showCreateForm && (
                 <motion.div
@@ -568,7 +575,11 @@ export default function Dashboard({ user }: DashboardProps) {
                           <Send className="w-4 h-4 mr-2" />
                           Send with Love
                         </Button>
-                        <Button variant="outline" onClick={() => setShowCreateForm(false)} className="border-pink-200">
+                        <Button
+                          variant="outline"
+                          onClick={() => setShowCreateForm(false)}
+                          className="border-pink-200"
+                        >
                           Cancel
                         </Button>
                       </div>
@@ -577,7 +588,6 @@ export default function Dashboard({ user }: DashboardProps) {
                 </motion.div>
               )}
             </AnimatePresence>
-
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="space-y-4">
               <AnimatePresence>
                 {filteredItems.map((item, index) => (
@@ -632,7 +642,6 @@ export default function Dashboard({ user }: DashboardProps) {
                   </motion.div>
                 ))}
               </AnimatePresence>
-
               {filteredItems.length === 0 && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12">
                   <div
@@ -645,11 +654,11 @@ export default function Dashboard({ user }: DashboardProps) {
                   <h3 className="text-lg font-medium text-gray-700 mb-2">No {activeTab}s yet</h3>
                   <p className="text-gray-500">Create your first {activeTab} to get started! 💕</p>
                 </motion.div>
-              )} 
+              )}
             </motion.div>
           </>
         )}
       </div>
     </div>
-  )
+  );
 }
