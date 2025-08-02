@@ -3,18 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Heart,
-  Sparkles,
-  Gift,
-  Camera,
-  Plus,
-  Send,
-  LogOut,
-  UserPlus,
-  Copy,
-  Check,
-  Share2,
-  Mail,
+  Heart, Sparkles, Gift, Camera, Plus, Send,
+  LogOut, UserPlus, Copy, Check, Share2, Mail,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,38 +17,18 @@ import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
 
 type ContentType = "dare" | "order" | "memory";
-
-interface RelatedUser {
-  name: string;
-}
+interface RelatedUser { name: string; }
 interface ContentItem {
-  id: string;
-  type: ContentType;
-  title: string;
-  content: string;
-  sender_id: string;
-  receiver_id: string;
-  completed: boolean;
-  created_at: string;
-  sender?: RelatedUser;
-  receiver?: RelatedUser;
+  id: string; type: ContentType; title: string; content: string;
+  sender_id: string; receiver_id: string; completed: boolean;
+  created_at: string; sender?: RelatedUser; receiver?: RelatedUser;
 }
-
 interface UserProfile {
-  id: string;
-  name: string;
-  email: string;
-  avatar_url?: string;
+  id: string; name: string; email: string; avatar_url?: string;
   partner_id?: string;
-  partner?: {
-    id: string;
-    name: string;
-  } | null;
+  partner?: { id: string; name: string } | null;
 }
-
-interface DashboardProps {
-  user: User;
-}
+interface DashboardProps { user: User; }
 
 export default function Dashboard({ user }: DashboardProps) {
   const [activeTab, setActiveTab] = useState<ContentType>("dare");
@@ -80,18 +50,18 @@ export default function Dashboard({ user }: DashboardProps) {
     if (!user) return;
     fetchProfile();
     fetchContent();
-    // Only handle invitation once per session/load
+    // Ensure invitation flow runs only ONCE per client session
     if (!invitationHandledRef.current) {
       handleInvitationAcceptance();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  // ======= FIXED INVITATION HANDLER =======
   const handleInvitationAcceptance = async () => {
     invitationHandledRef.current = true;
     const invitationCode = user.user_metadata?.invitation_code;
     if (!invitationCode) return;
-
     try {
       const { data: invitation, error: inviteError } = await supabase
         .from("partner_invitations")
@@ -117,9 +87,8 @@ export default function Dashboard({ user }: DashboardProps) {
           .eq("id", invitation.id);
 
         if (!updateError1 && !updateError2) {
-          // Immediately refresh profile and content
-          await fetchProfile();
-          await fetchContent();
+          // Force full refresh for up-to-the-moment profile info!
+          window.location.reload();
         }
       }
     } catch (error) {
@@ -164,7 +133,6 @@ export default function Dashboard({ user }: DashboardProps) {
           partner = partnerData;
         }
       }
-
       setProfile({ ...data, partner });
     } catch (error) {
       console.error("Error fetching profile:", error);
@@ -184,9 +152,7 @@ export default function Dashboard({ user }: DashboardProps) {
         `)
         .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
         .order("created_at", { ascending: false });
-
       if (error) throw error;
-
       const formattedItems: ContentItem[] = data.map((item: any) => ({
         id: item.id,
         type: item.type as ContentType,
@@ -199,7 +165,6 @@ export default function Dashboard({ user }: DashboardProps) {
         sender: Array.isArray(item.sender) ? item.sender[0] : item.sender,
         receiver: Array.isArray(item.receiver) ? item.receiver[0] : item.receiver,
       }));
-
       setItems(formattedItems);
     } catch (error) {
       console.error("Error fetching content:", error);
@@ -209,7 +174,6 @@ export default function Dashboard({ user }: DashboardProps) {
 
   const handleCreateItem = async () => {
     if (!newItem.title.trim() || !newItem.content.trim() || !profile?.partner_id) return;
-
     try {
       const { error } = await supabase.from("content").insert({
         type: activeTab,
@@ -218,9 +182,7 @@ export default function Dashboard({ user }: DashboardProps) {
         sender_id: user.id,
         receiver_id: profile.partner_id,
       });
-
       if (error) throw error;
-
       setNewItem({ title: "", content: "" });
       setShowCreateForm(false);
       fetchContent();
@@ -238,7 +200,6 @@ export default function Dashboard({ user }: DashboardProps) {
           completed_at: new Date().toISOString(),
         })
         .eq("id", itemId);
-
       if (error) throw error;
       fetchContent();
     } catch (error) {
@@ -252,7 +213,6 @@ export default function Dashboard({ user }: DashboardProps) {
 
   const handleSendInvitation = async () => {
     if (!partnerEmail.trim()) return;
-
     setInviteLoading(true);
     try {
       const invitationCode = generateInviteCode();
@@ -497,8 +457,6 @@ export default function Dashboard({ user }: DashboardProps) {
           )}
         </AnimatePresence>
 
-        {/* === Main Dashboard Content (always shown) === */}
-
         {/* Tabs */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -647,7 +605,6 @@ export default function Dashboard({ user }: DashboardProps) {
               </motion.div>
             ))}
           </AnimatePresence>
-
           {filteredItems.length === 0 && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12">
               <div
